@@ -1,55 +1,93 @@
 'use client'
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useForm, FieldValues, SubmitHandler } from "react-hook-form"
 import Input from "./inputs/Input"
 import Button from "./Button"
 import { AuthSocialButton } from "./AuthSocialButton"
 import {BsGithub, BsGoogle} from "react-icons/bs"
-
+import axios from "axios"
+import { toast } from "react-hot-toast"
+import { signIn, useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 type Variant = "LOGIN" | "REGISTER"
 
 const AuthForm = () => {
+  const session = useSession()
+  const router = useRouter()
   const [variant, setVariant] = useState<Variant>('LOGIN')  
   const [isLoading, setIsLoading] = useState(false)
 
-  const toggleVariant = useCallback(()=>{
-    if(variant == 'LOGIN'){
-        setVariant('REGISTER')
-    } else {
-        setVariant('LOGIN')
+  useEffect(() => {
+    if(session?.status === 'authenticated'){
+      router.push('/users')
     }
-  },[variant])
+  },[session?.status,router])
+
+  const toggleVariant = useCallback(() => {
+    if (variant === 'LOGIN') {
+      setVariant('REGISTER');
+    } else {
+      setVariant('LOGIN');
+    }
+  }, [variant])
 
   const {
     register,
     handleSubmit,
-    formState:{
-        errors
+    formState: {
+      errors,
     }
-
   } = useForm<FieldValues>({
-    defaultValues:{
-        name: '',
-        email: '',
-        password: ''
+    defaultValues: {
+      name: '',
+      email: '',
+      password: ''
     }
   })
 
   const onSubmit: SubmitHandler<FieldValues> = (data) => {
     setIsLoading(true)
-    if(variant == 'REGISTER'){
-        //Axios register
+  
+    if (variant === 'REGISTER') {
+      axios.post('/api/register', data)
+      .then(()=> signIn('credentials',data))
+      .catch(()=> toast.error("Algo salió mal"))
+      .finally(() => {setIsLoading(false)})
     }
-    if(variant == 'LOGIN'){
-        //NextAuth SignIn
+    if(variant === 'LOGIN'){
+        signIn('credentials',{
+            ...data,
+            redirect: false
+        })
+        .then((callback) =>{
+            if(callback?.error){
+                toast.error('Credenciales invalidas')
+            }
+
+            if(callback?.ok && !callback?.error){
+                toast.success('Sesión iniciada')
+                router.push('/users')
+            }
+        })
+        .finally(() => {setIsLoading(false)})
     }
   }
 
   const socialAction = (action: string) => {
     setIsLoading(true)
-    //NextAuth social signin
+    signIn(action,{redirect:false})
+    .then((callback) =>{
+        if(callback?.error){
+            toast.error('Credenciales invalidas')
+        }
+
+        if(callback?.ok && !callback?.error){
+            toast.success('Sesión iniciada')
+        }
+    })
+    .finally(() => {setIsLoading(false)})
   }
 
   return (
@@ -74,7 +112,7 @@ const AuthForm = () => {
                     </div>
                     <div className="relative flex justify-center text-sm">
                         <span className="bg-white px-2 text-gray-500 ">
-                            O continua con
+                            O
                         </span>
                     </div>
                 </div>
